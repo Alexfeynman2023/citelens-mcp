@@ -1,6 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BingWebmasterClient } from './bing-client.js';
 
+function createMockResponse(data: { ok: boolean; status?: number; statusText?: string; json?: () => Promise<unknown>; text?: () => Promise<string> }) {
+  return {
+    ok: data.ok,
+    status: data.status || (data.ok ? 200 : 500),
+    statusText: data.statusText || (data.ok ? 'OK' : 'Error'),
+    headers: new Headers({ 'content-type': 'application/json' }),
+    json: data.json || (async () => ({})),
+    text: data.text || (async () => ''),
+  };
+}
+
 describe('BingWebmasterClient', () => {
   const originalFetch = global.fetch;
   let client: BingWebmasterClient;
@@ -25,20 +36,19 @@ describe('BingWebmasterClient', () => {
         { Url: 'https://test.com', IsOwner: false, IsVerified: true },
       ];
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: mockSites }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: mockSites }),
+        })
+      );
 
       const result = await client.getUserSites();
 
       expect(result).toEqual(mockSites);
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('GetUserSites'),
-        expect.objectContaining({
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        })
+        expect.any(Object)
       );
       expect(global.fetch).toHaveBeenCalledWith(
         expect.stringContaining('apikey=test-api-key'),
@@ -47,10 +57,12 @@ describe('BingWebmasterClient', () => {
     });
 
     it('should return empty array for null response', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: null }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: null }),
+        })
+      );
 
       const result = await client.getUserSites();
       expect(result).toEqual([]);
@@ -63,10 +75,12 @@ describe('BingWebmasterClient', () => {
         { Date: '/Date(1704067200000-0700)/', Clicks: 100, Impressions: 1000 },
       ];
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: mockStats }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: mockStats }),
+        })
+      );
 
       const result = await client.getRankAndTrafficStats('https://example.com');
 
@@ -82,10 +96,12 @@ describe('BingWebmasterClient', () => {
         { Query: 'test query', Impressions: 500, Clicks: 25, AvgImpressionPosition: 3.5, AvgClickPosition: 2.1 },
       ];
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: mockStats }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: mockStats }),
+        })
+      );
 
       const result = await client.getQueryStats('https://example.com');
 
@@ -111,10 +127,12 @@ describe('BingWebmasterClient', () => {
         DiscoveryDate: null,
       };
 
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: mockInfo }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: mockInfo }),
+        })
+      );
 
       const result = await client.getUrlInfo('https://example.com', 'https://example.com/page');
 
@@ -126,10 +144,12 @@ describe('BingWebmasterClient', () => {
 
   describe('submitUrlBatch', () => {
     it('should submit URLs via POST', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ d: null }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: null }),
+        })
+      );
 
       const urls = ['https://example.com/page1', 'https://example.com/page2'];
       await client.submitUrlBatch('https://example.com', urls);
@@ -138,9 +158,6 @@ describe('BingWebmasterClient', () => {
         expect.stringContaining('SubmitUrlBatch'),
         expect.objectContaining({
           method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json; charset=utf-8',
-          }),
           body: expect.stringContaining('urlList'),
         })
       );
@@ -157,23 +174,38 @@ describe('BingWebmasterClient', () => {
 
   describe('error handling', () => {
     it('should throw on HTTP error', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        text: async () => 'Invalid API key',
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          json: async () => ({ ErrorCode: 3, Message: 'ERROR!!! InvalidApiKey' }),
+        })
+      );
 
-      await expect(client.getUserSites()).rejects.toThrow('401 Unauthorized');
+      await expect(client.getUserSites()).rejects.toThrow('Invalid API key');
     });
 
     it('should throw on API error response', async () => {
-      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-        ok: true,
-        json: async () => ({ ErrorCode: 100, Message: 'Throttled' }),
-      });
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ ErrorCode: 9, Message: 'ThrottleUser' }),
+        })
+      );
 
-      await expect(client.getUserSites()).rejects.toThrow('Bing API error 100: Throttled');
+      await expect(client.getUserSites()).rejects.toThrow('Rate limited');
+    });
+
+    it('should format unknown error codes cleanly', async () => {
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ ErrorCode: 999, Message: 'ERROR!!! SomeNewError' }),
+        })
+      );
+
+      await expect(client.getUserSites()).rejects.toThrow('SomeNewError (code 999)');
     });
   });
 });

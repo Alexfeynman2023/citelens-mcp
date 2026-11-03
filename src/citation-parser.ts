@@ -151,24 +151,64 @@ export function parseSearchQueriesReport(rows: unknown[][], headers: string[]): 
   })).filter(item => item.groundingQuery);
 }
 
+function stripBom(content: string): string {
+  if (content.charCodeAt(0) === 0xFEFF) {
+    return content.slice(1);
+  }
+  return content;
+}
+
+function detectDelimiter(content: string): string {
+  const firstLine = content.split('\n')[0] || '';
+  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  
+  if (semicolonCount > commaCount && semicolonCount > tabCount) {
+    return ';';
+  }
+  if (tabCount > commaCount && tabCount > semicolonCount) {
+    return '\t';
+  }
+  return ',';
+}
+
+function formatDetectedColumns(headers: string[]): string {
+  return `Detected columns: [${headers.map(h => `"${h}"`).join(', ')}]`;
+}
+
 export function parseCsv(content: string): ParseResult {
-  const records = csvParse(content, {
+  const cleanContent = stripBom(content);
+  
+  if (cleanContent.includes('\uFFFD')) {
+    throw new Error('File appears to be in an unsupported encoding. Please save as UTF-8.');
+  }
+  
+  const delimiter = detectDelimiter(cleanContent);
+  
+  const records = csvParse(cleanContent, {
     skip_empty_lines: true,
     relaxColumnCount: true,
     relaxQuotes: true,
+    delimiter,
+    trim: true,
   }) as unknown[][];
 
   if (records.length < 2) {
     throw new Error('CSV file is empty or has no data rows');
   }
 
-  const headers = (records[0] as string[]).map(h => String(h));
-  const rows = records.slice(1);
+  const headers = (records[0] as string[]).map(h => String(h).trim());
+  const rows = records.slice(1).filter(row => 
+    Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== '')
+  );
 
   const reportType = detectReportType(headers);
   if (!reportType) {
     throw new Error(
-      'Unable to detect report type. Expected columns for AIPageStatsReport (page, citations), ' +
+      'Unable to detect report type. ' +
+      formatDetectedColumns(headers) + '. ' +
+      'Expected columns for AIPageStatsReport (page, citations), ' +
       'AIPerformanceOverviewStats (date, citations, cited pages), or ' +
       'AISearchQueriesReport (grounding query, citations)'
     );
@@ -212,7 +252,9 @@ export function parseXlsx(buffer: Buffer): ParseResult {
   const reportType = detectReportType(headers);
   if (!reportType) {
     throw new Error(
-      'Unable to detect report type. Expected columns for AIPageStatsReport (page, citations), ' +
+      'Unable to detect report type. ' +
+      formatDetectedColumns(headers) + '. ' +
+      'Expected columns for AIPageStatsReport (page, citations), ' +
       'AIPerformanceOverviewStats (date, citations, cited pages), or ' +
       'AISearchQueriesReport (grounding query, citations)'
     );

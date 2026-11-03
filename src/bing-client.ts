@@ -10,74 +10,111 @@ import type {
   BingUrlSubmissionQuota,
   BingApiError,
 } from './types.js';
+import { type BingAuthProvider, ApiKeyAuth, OAuthAuth, type OAuthTokens, type TokenRefreshCallback } from './bing-auth.js';
+
+export { ApiKeyAuth, OAuthAuth, type OAuthTokens, type TokenRefreshCallback, type BingAuthProvider };
 
 const BING_API_BASE = 'https://ssl.bing.com/webmaster/api.svc/json';
 
-export class BingWebmasterClient {
-  private apiKey: string;
+const ERROR_MESSAGES: Record<number, string> = {
+  1: 'Unknown error',
+  2: 'Internal error',
+  3: 'Invalid API key - check your BING_WEBMASTER_API_KEY',
+  4: 'User not authorized',
+  5: 'Invalid URL format',
+  6: 'URL not found in your verified sites',
+  7: 'Site not verified - verify the site in Bing Webmaster Tools first',
+  8: 'Quota exceeded - daily URL submission limit reached',
+  9: 'Rate limited (ThrottleUser) - slow down requests',
+  10: 'Rate limited (ThrottleHost) - slow down requests',
+};
 
-  constructor(apiKey: string) {
-    if (!apiKey) {
-      throw new Error('Bing Webmaster API key is required');
+function formatApiError(errorCode: number, message: string): string {
+  const friendlyMessage = ERROR_MESSAGES[errorCode];
+  if (friendlyMessage) {
+    return `Bing API error: ${friendlyMessage} (code ${errorCode})`;
+  }
+  const cleanMessage = message.replace(/^ERROR!!!\s*/i, '').trim();
+  return `Bing API error: ${cleanMessage} (code ${errorCode})`;
+}
+
+export class BingWebmasterClient {
+  private auth: BingAuthProvider;
+
+  constructor(apiKeyOrAuth: string | BingAuthProvider) {
+    if (typeof apiKeyOrAuth === 'string') {
+      this.auth = new ApiKeyAuth(apiKeyOrAuth);
+    } else {
+      this.auth = apiKeyOrAuth;
     }
-    this.apiKey = apiKey;
   }
 
   private async request<T>(method: string, params: Record<string, string> = {}): Promise<T> {
     const url = new URL(`${BING_API_BASE}/${method}`);
-    url.searchParams.set('apikey', this.apiKey);
+    const headers = new Headers({ 'Accept': 'application/json' });
+    
+    this.auth.applyAuth(url, headers);
     
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
+    }
+
+    if (this.auth instanceof OAuthAuth) {
+      await this.auth.refreshIfNeeded();
     }
 
     const response = await fetch(url.toString(), {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers,
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Bing API error: ${response.status} ${response.statusText} - ${text}`);
-    }
-
-    const data = await response.json() as { d: T } | BingApiError;
-    
-    if ('ErrorCode' in data) {
-      throw new Error(`Bing API error ${data.ErrorCode}: ${data.Message}`);
-    }
-
-    return (data as { d: T }).d;
+    return this.handleResponse<T>(response, method);
   }
 
   private async postRequest<T>(method: string, body: unknown, params: Record<string, string> = {}): Promise<T> {
     const url = new URL(`${BING_API_BASE}/${method}`);
-    url.searchParams.set('apikey', this.apiKey);
+    const headers = new Headers({
+      'Accept': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
+    });
+    
+    this.auth.applyAuth(url, headers);
     
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }
 
+    if (this.auth instanceof OAuthAuth) {
+      await this.auth.refreshIfNeeded();
+    }
+
     const response = await fetch(url.toString(), {
       method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json; charset=utf-8',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Bing API error: ${response.status} ${response.statusText} - ${text}`);
+    return this.handleResponse<T>(response, method);
+  }
+
+  private async handleResponse<T>(response: Response, method: string): Promise<T> {
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (!contentType.includes('json')) {
+      if (!response.ok) {
+        throw new Error(`Bing API error: ${response.status} ${response.statusText} for ${method}`);
+      }
+      return undefined as T;
     }
 
     const data = await response.json() as { d: T } | BingApiError;
     
-    if ('ErrorCode' in data) {
-      throw new Error(`Bing API error ${data.ErrorCode}: ${data.Message}`);
+    if ('ErrorCode' in data && data.ErrorCode !== 0) {
+      throw new Error(formatApiError(data.ErrorCode, data.Message));
+    }
+
+    if (!response.ok) {
+      throw new Error(`Bing API error: ${response.status} ${response.statusText} for ${method}`);
     }
 
     return (data as { d: T }).d;
@@ -165,7 +202,7 @@ export class BingWebmasterClient {
   }
 
   async submitFeed(siteUrl: string, feedUrl: string): Promise<void> {
-    await this.request<void>('SubmitFeed', {
+    await this.postRequest<void>('SubmitFeed', {
       siteUrl,
       feedUrl,
     });

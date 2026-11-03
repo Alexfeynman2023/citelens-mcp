@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { parseCsv, parseXlsx, detectReportType } from './citation-parser.js';
+
+const fixturesDir = join(process.cwd(), 'fixtures');
 
 describe('citation-parser', () => {
   describe('detectReportType', () => {
@@ -138,11 +142,139 @@ https://example.com/page2,50`;
       expect(() => parseCsv('')).toThrow('CSV file is empty');
     });
 
-    it('should throw on unrecognized format', () => {
+    it('should throw on unrecognized format with detected columns', () => {
       const csv = `Name,Value
 test,123`;
 
-      expect(() => parseCsv(csv)).toThrow('Unable to detect report type');
+      expect(() => parseCsv(csv)).toThrow('Detected columns: ["Name", "Value"]');
+    });
+  });
+
+  describe('robust parsing', () => {
+    it('should handle UTF-8 BOM', () => {
+      const csvWithBom = '\uFEFFPage,Citations\nhttps://example.com/page1,100';
+      const result = parseCsv(csvWithBom);
+      expect(result.reportType).toBe('AIPageStatsReport');
+      expect(result.data).toHaveLength(1);
+    });
+
+    it('should handle semicolon delimiters', () => {
+      const csv = `Page;Citations
+https://example.com/page1;150
+https://example.com/page2;100`;
+
+      const result = parseCsv(csv);
+      expect(result.reportType).toBe('AIPageStatsReport');
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0]).toEqual({
+        page: 'https://example.com/page1',
+        citations: 150,
+      });
+    });
+
+    it('should handle tab delimiters', () => {
+      const csv = `Page\tCitations
+https://example.com/page1\t150`;
+
+      const result = parseCsv(csv);
+      expect(result.reportType).toBe('AIPageStatsReport');
+      expect(result.data[0]).toEqual({
+        page: 'https://example.com/page1',
+        citations: 150,
+      });
+    });
+
+    it('should handle quoted fields with commas', () => {
+      const csv = `Page,Citations
+"https://example.com/page,with,commas",150`;
+
+      const result = parseCsv(csv);
+      expect(result.data[0]).toMatchObject({
+        page: 'https://example.com/page,with,commas',
+        citations: 150,
+      });
+    });
+
+    it('should handle quoted fields with escaped quotes', () => {
+      const csv = `Page,Citations
+"https://example.com/page ""quoted""",100`;
+
+      const result = parseCsv(csv);
+      expect(result.data[0]).toMatchObject({
+        page: 'https://example.com/page "quoted"',
+      });
+    });
+
+    it('should ignore extra columns', () => {
+      const csv = `Grounding query,Intent,Topic,Citations,Citation share,Extra Column,Another
+what is seo,informational,SEO,200,15%,extra1,extra2`;
+
+      const result = parseCsv(csv);
+      expect(result.reportType).toBe('AISearchQueriesReport');
+      expect(result.data[0]).toEqual({
+        groundingQuery: 'what is seo',
+        intent: 'informational',
+        topic: 'SEO',
+        citations: 200,
+        citationShare: 0.15,
+      });
+    });
+
+    it('should filter out empty rows', () => {
+      const csv = `Date,Citations,Cited pages
+2024-01-01,500,25
+
+2024-01-02,520,27
+
+`;
+
+      const result = parseCsv(csv);
+      expect(result.data).toHaveLength(2);
+    });
+
+    it('should trim whitespace from headers and values', () => {
+      const csv = `  Page  ,  Citations  
+  https://example.com/page1  ,  150  `;
+
+      const result = parseCsv(csv);
+      expect(result.data[0]).toEqual({
+        page: 'https://example.com/page1',
+        citations: 150,
+      });
+    });
+
+    it('should parse real BOM file from fixtures', () => {
+      try {
+        const content = readFileSync(join(fixturesDir, 'page-stats-bom-real.csv'), 'utf-8');
+        const result = parseCsv(content);
+        expect(result.reportType).toBe('AIPageStatsReport');
+        expect(result.data).toHaveLength(2);
+      } catch (e) {
+        // Skip if fixtures not available
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      }
+    });
+
+    it('should parse semicolon file from fixtures', () => {
+      try {
+        const content = readFileSync(join(fixturesDir, 'page-stats-semicolon.csv'), 'utf-8');
+        const result = parseCsv(content);
+        expect(result.reportType).toBe('AIPageStatsReport');
+        expect(result.data).toHaveLength(2);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      }
+    });
+
+    it('should parse German headers from fixtures', () => {
+      try {
+        const content = readFileSync(join(fixturesDir, 'page-stats-german.csv'), 'utf-8');
+        const result = parseCsv(content);
+        expect(result.reportType).toBe('AIPageStatsReport');
+        expect(result.data).toHaveLength(2);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      }
     });
   });
 

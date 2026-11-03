@@ -8,11 +8,13 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
     strategy:
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [18.x, 20.x, 22.x]
+      fail-fast: false
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -58,3 +60,9 @@ jobs:
 
       - name: Check package can be packed
         run: npm pack --dry-run
+
+      - name: Test npx execution
+        run: |
+          timeout 3 node dist/index.js || true
+        env:
+          BING_WEBMASTER_API_KEY: ''

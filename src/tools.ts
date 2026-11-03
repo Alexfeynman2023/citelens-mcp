@@ -151,13 +151,17 @@ export async function submitUrlBatchViaIndexNow(
 
 // AI Citation tools
 
+import { resolve, basename } from 'node:path';
+
 export function importAICitationReport(ctx: ToolContext, filePath: string, siteUrl: string) {
-  if (!existsSync(filePath)) {
-    throw new Error(`File not found: ${filePath}`);
+  const resolvedPath = resolve(filePath);
+  
+  if (!existsSync(resolvedPath)) {
+    throw new Error(`File not found: ${basename(filePath)}`);
   }
 
-  const content = readFileSync(filePath);
-  const filename = filePath.split('/').pop() || filePath;
+  const content = readFileSync(resolvedPath);
+  const filename = basename(resolvedPath);
   const parseResult = parseReportFile(content, filename);
 
   const db = ctx.getDatabase();
