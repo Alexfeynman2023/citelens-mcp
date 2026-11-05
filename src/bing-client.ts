@@ -27,6 +27,7 @@ const ERROR_MESSAGES: Record<number, string> = {
   8: 'Quota exceeded - daily URL submission limit reached',
   9: 'Rate limited (ThrottleUser) - slow down requests',
   10: 'Rate limited (ThrottleHost) - slow down requests',
+  14: 'Not authorized for this URL/site',
 };
 
 function formatApiError(errorCode: number, message: string): string {
@@ -120,11 +121,20 @@ export class BingWebmasterClient {
     return (data as { d: T }).d;
   }
 
-  private parseBingDate(dateStr: string): string {
-    const match = /\/Date\((\d+)([+-]\d{4})?\)\//.exec(dateStr);
+  /**
+   * Parse Bing's /Date(milliseconds)/ format to ISO string.
+   * Handles optional timezone offset: /Date(1234567890+0000)/
+   * Returns null for sentinel values like /Date(-62135596800000)/ (year <= 1)
+   */
+  private parseBingDate(dateStr: string): string | null {
+    const match = /\/Date\((-?\d+)([+-]\d{4})?\)\//.exec(dateStr);
     if (match) {
       const ms = parseInt(match[1], 10);
-      return new Date(ms).toISOString();
+      const date = new Date(ms);
+      if (date.getFullYear() <= 1) {
+        return null;
+      }
+      return date.toISOString();
     }
     return dateStr;
   }
@@ -140,7 +150,7 @@ export class BingWebmasterClient {
     });
     return (result || []).map(stat => ({
       ...stat,
-      Date: this.parseBingDate(stat.Date),
+      Date: this.parseBingDate(stat.Date) || stat.Date,
     }));
   }
 
@@ -164,7 +174,7 @@ export class BingWebmasterClient {
     });
     return (result || []).map(stat => ({
       ...stat,
-      Date: this.parseBingDate(stat.Date),
+      Date: this.parseBingDate(stat.Date) || stat.Date,
     }));
   }
 
@@ -174,7 +184,7 @@ export class BingWebmasterClient {
     });
     return (result || []).map(issue => ({
       ...issue,
-      Date: this.parseBingDate(issue.Date),
+      Date: this.parseBingDate(issue.Date) || issue.Date,
     }));
   }
 
@@ -196,8 +206,8 @@ export class BingWebmasterClient {
     });
     return (result || []).map(feed => ({
       ...feed,
-      LastSubmitted: this.parseBingDate(feed.LastSubmitted),
-      LastDownload: feed.LastDownload ? this.parseBingDate(feed.LastDownload) : null,
+      Submitted: this.parseBingDate(feed.Submitted) || feed.Submitted,
+      LastCrawled: feed.LastCrawled ? this.parseBingDate(feed.LastCrawled) : null,
     }));
   }
 

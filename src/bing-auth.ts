@@ -8,10 +8,15 @@
  * OAuth 2.0 flow (per https://learn.microsoft.com/en-us/bingwebmaster/oauth2):
  * - Authorization URL: https://www.bing.com/webmasters/oauth/authorize
  * - Token URL: https://www.bing.com/webmasters/oauth/token
- * - Scopes: webmaster.read, webmaster.manage
+ * - Scopes: webmaster.read, webmaster.manage (NOTE: token response may return "Manage" or "Read" instead)
  * - Authorization code valid for 5 minutes
  * - Access token expires in ~3600 seconds
  * - Refresh token valid until user revocation
+ * 
+ * IMPORTANT (verified 2026-11-05):
+ * - Refresh token responses do NOT include a new refresh_token - persist the original
+ * - Token scope in response may be "Manage" instead of "webmaster.manage"
+ * - Refresh works without redirect_uri parameter
  */
 
 export interface BingAuthProvider {
@@ -50,6 +55,11 @@ export class OAuthAuth implements BingAuthProvider {
 
   static readonly AUTH_URL = 'https://www.bing.com/webmasters/oauth/authorize';
   static readonly TOKEN_URL = 'https://www.bing.com/webmasters/oauth/token';
+  /**
+   * Scopes for authorization request.
+   * NOTE: Token response may return simplified scope names like "Manage" or "Read"
+   * instead of "webmaster.manage" or "webmaster.read"
+   */
   static readonly SCOPES = ['webmaster.read', 'webmaster.manage'] as const;
 
   constructor(tokens: OAuthTokens, onTokenRefresh?: TokenRefreshCallback) {
@@ -121,6 +131,7 @@ export class OAuthAuth implements BingAuthProvider {
       refresh_token?: string;
       expires_in?: number;
       token_type: string;
+      scope?: string;
     };
 
     return {
@@ -130,6 +141,17 @@ export class OAuthAuth implements BingAuthProvider {
     };
   }
 
+  /**
+   * Refresh an access token using a refresh token.
+   * 
+   * IMPORTANT: The response does NOT include a new refresh_token.
+   * The original refresh_token remains valid and should be persisted.
+   * 
+   * @param clientId - OAuth client ID
+   * @param clientSecret - OAuth client secret
+   * @param refreshToken - The refresh token to use
+   * @returns New tokens (refreshToken will be the same as input since server doesn't return a new one)
+   */
   static async refreshAccessToken(
     clientId: string,
     clientSecret: string,
@@ -158,10 +180,12 @@ export class OAuthAuth implements BingAuthProvider {
       refresh_token?: string;
       expires_in?: number;
       token_type: string;
+      scope?: string;
     };
 
     return {
       accessToken: data.access_token,
+      // Server does NOT return refresh_token on refresh - keep the original
       refreshToken: data.refresh_token || refreshToken,
       expiresAt: data.expires_in ? Date.now() + data.expires_in * 1000 : undefined,
     };
