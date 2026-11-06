@@ -1,0 +1,74 @@
+# CiteLens - Hermes Plugin Catalog Entry
+# Submit this file as plugin-catalog/citelens.yaml to NousResearch/hermes-agent
+# See: https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/catalog-submission
+
+name: citelens
+repo: https://github.com/Alexfeynman2023/citelens-mcp
+subdir: hermes
+sha: "REPLACE_WITH_40_CHAR_COMMIT_SHA_AFTER_MERGE"
+version: "0.1.0"
+
+tier: community
+
+author: Alex Feynman
+description: >
+  See how AI is citing your website. Access Bing Webmaster Tools data,
+  submit URLs via IndexNow for instant indexing, and analyze AI citation
+  reports from Bing. Perfect for SEO professionals tracking AI search visibility.
+
+capabilities:
+  tools:
+    - bing_list_sites
+    - bing_get_traffic
+    - bing_get_query_stats
+    - bing_get_page_stats
+    - bing_get_crawl_stats
+    - bing_get_crawl_issues
+    - bing_get_url_info
+    - bing_list_sitemaps
+    - bing_submit_sitemap
+    - bing_get_url_submission_quota
+    - bing_submit_url
+    - bing_submit_url_batch
+    - indexnow_generate_key
+    - indexnow_validate_key
+    - indexnow_submit_url
+    - indexnow_submit_batch
+    - ai_import_citation_report
+    - ai_get_top_cited_pages
+    - ai_get_citation_trend
+    - ai_get_top_queries
+    - ai_get_top_intents
+    - ai_get_top_topics
+    - ai_compare_with_bing_stats
+    - ai_get_import_history
+    - snapshot_stats
+    - list_snapshots
+    - diff_stats
+
+requires_env:
+  - name: BING_WEBMASTER_API_KEY
+    description: "Bing Webmaster Tools API key (get from bing.com/webmasters → Settings → API Access)"
+    secret: true
+  - name: INDEXNOW_KEY
+    description: "IndexNow key for URL submission (optional, can be generated)"
+    secret: false
+
+requires_hermes: ">=0.21.0"
+
+tags:
+  - seo
+  - webmaster
+  - indexnow
+  - analytics
+  - ai-citations
+
+# Screenshots for the catalog page (update URLs after publishing)
+# screenshots:
+#   - url: https://raw.githubusercontent.com/Alexfeynman2023/citelens-mcp/main/docs/screenshot-tools.png
+#     caption: "CiteLens tools available in Hermes"
+
+# Disclosure per rule 13:
+# - Network calls: Bing Webmaster Tools API (ssl.bing.com), IndexNow API (api.indexnow.org)
+# - Local storage: SQLite database in ~/.citelens/ for historical snapshots
+# - No telemetry or usage reporting

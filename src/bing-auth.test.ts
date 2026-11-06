@@ -190,6 +190,59 @@ describe('BingAuth', () => {
         expect(mockRefresh).not.toHaveBeenCalled();
       });
     });
+
+    describe('refreshAccessToken - refresh_token preservation', () => {
+      const originalFetch = global.fetch;
+
+      beforeEach(() => {
+        global.fetch = vi.fn();
+      });
+
+      afterEach(() => {
+        global.fetch = originalFetch;
+      });
+
+      it('should preserve original refresh_token when server omits it', async () => {
+        (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            access_token: 'new-access-token',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        });
+
+        const tokens = await OAuthAuth.refreshAccessToken(
+          'client-id',
+          'client-secret',
+          'original-refresh-token'
+        );
+
+        expect(tokens.accessToken).toBe('new-access-token');
+        expect(tokens.refreshToken).toBe('original-refresh-token');
+      });
+
+      it('should use new refresh_token when server provides it', async () => {
+        (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+            token_type: 'Bearer',
+          }),
+        });
+
+        const tokens = await OAuthAuth.refreshAccessToken(
+          'client-id',
+          'client-secret',
+          'original-refresh-token'
+        );
+
+        expect(tokens.accessToken).toBe('new-access-token');
+        expect(tokens.refreshToken).toBe('new-refresh-token');
+      });
+    });
   });
 
   describe('createAuthProvider', () => {

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schema/v1/plugin.json",
+  "schema_version": "1.0.0",
+  "name": "CiteLens",
+  "description": "See how AI is citing your website. Access Bing Webmaster Tools data, IndexNow URL submission, and AI citation analysis through your AI assistant.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Alex Feynman",
+    "url": "https://github.com/Alexfeynman2023"
+  },
+  "repository": "https://github.com/Alexfeynman2023/citelens-mcp",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "indexnow",
+    "webmaster",
+    "ai-citations",
+    "seo"
+  ],
+  "components": {
+    "mcp": {
+      "$ref": "./mcp.json"
+    }
+  }
+}
