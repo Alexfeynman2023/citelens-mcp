@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schema/v1/mcp.json",
+  "servers": {
+    "citelens": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "citelens-mcp"],
+      "env": {
+        "BING_WEBMASTER_API_KEY": "${BING_WEBMASTER_API_KEY}",
+        "INDEXNOW_KEY": "${INDEXNOW_KEY}",
+        "CITELENS_ACCESS_TOKEN": "${CITELENS_ACCESS_TOKEN}",
+        "CITELENS_REFRESH_TOKEN": "${CITELENS_REFRESH_TOKEN}",
+        "CITELENS_CLIENT_ID": "${CITELENS_CLIENT_ID}",
+        "CITELENS_CLIENT_SECRET": "${CITELENS_CLIENT_SECRET}",
+        "CITELENS_DATA_DIR": "${CITELENS_DATA_DIR}"
+      }
+    }
+  }
+}

@@ -2,20 +2,28 @@
 
 **See how AI is citing your website.** An open-source MCP server that gives AI assistants access to your Bing Webmaster Tools data, IndexNow submission, and AI citation analysis.
 
-[![CI](https://github.com/user/citelens-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/user/citelens-mcp/actions/workflows/ci.yml)
+[![CI](https://github.com/Alexfeynman2023/citelens-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexfeynman2023/citelens-mcp/actions/workflows/ci.yml)
 [![npm version](https://badge.fury.io/js/citelens-mcp.svg)](https://www.npmjs.com/package/citelens-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why CiteLens?
 
-As AI-powered search (like Microsoft Copilot) becomes mainstream, understanding how your content is being cited by AI is crucial for SEO. CiteLens bridges the gap by:
+As AI-powered search becomes mainstream, understanding how your content is being cited by AI is crucial for SEO. CiteLens bridges the gap by letting you:
 
-- **Accessing your Bing Webmaster Tools data** directly from Claude, Cursor, or ChatGPT
-- **Submitting URLs via IndexNow** for instant indexing across search engines
-- **Analyzing AI citation reports** exported from Bing to understand which pages AI is citing
-- **Tracking historical trends** since Bing stats update weekly with no date parameters
+- **Access your Bing Webmaster Tools data** directly from Claude, Cursor, or any MCP client
+- **Submit URLs via IndexNow** for instant indexing across search engines
+- **Analyze AI citation reports** exported from Bing to understand which pages AI is citing
+- **Track historical trends** since Bing stats update weekly with no date parameters
 
-## 30-Second Quickstart
+## Quick Start
+
+### Prerequisites
+
+Get your Bing Webmaster API key:
+1. Go to [Bing Webmaster Tools](https://www.bing.com/webmasters)
+2. Sign in and verify your site
+3. Go to **Settings → API Access**
+4. Generate your API key
 
 ### Claude Desktop
 
@@ -38,7 +46,7 @@ Add to your `claude_desktop_config.json`:
 
 ### Cursor
 
-Add to your Cursor MCP settings:
+Add to your Cursor MCP settings (Settings → MCP):
 
 ```json
 {
@@ -55,12 +63,26 @@ Add to your Cursor MCP settings:
 }
 ```
 
-### Getting Your API Key
+### Hermes Agent
 
-1. Go to [Bing Webmaster Tools](https://www.bing.com/webmasters)
-2. Sign in and verify your site
-3. Go to **Settings → API Access**
-4. Generate your API key
+Install the CiteLens plugin:
+
+```bash
+hermes plugins install Alexfeynman2023/citelens-mcp --subdir hermes
+hermes plugins enable citelens
+```
+
+Or add to your Hermes config:
+
+```yaml
+mcp_servers:
+  citelens:
+    command: npx
+    args: ["-y", "citelens-mcp"]
+    env:
+      BING_WEBMASTER_API_KEY: ${BING_WEBMASTER_API_KEY}
+      INDEXNOW_KEY: ${INDEXNOW_KEY}
+```
 
 ## Available Tools
 
@@ -81,7 +103,7 @@ Add to your Cursor MCP settings:
 | `bing_submit_url` | Submit a single URL for indexing |
 | `bing_submit_url_batch` | Submit multiple URLs (max 500) |
 
-### IndexNow (Recommended for URL Submission)
+### IndexNow (Instant URL Indexing)
 
 | Tool | Description |
 |------|-------------|
@@ -115,41 +137,75 @@ Add to your Cursor MCP settings:
 
 Once configured, try asking your AI assistant:
 
-- *"Show me my top 10 pages by Bing impressions"*
+- *"Show me my top 10 pages by impressions"*
 - *"Which of my pages are being cited by AI? Import the AI report from ~/Downloads/mysite_AIPageStatsReport.csv"*
 - *"Submit these new blog posts to IndexNow: [urls]"*
 - *"Compare my keyword rankings from last week to this week"*
-- *"What crawl issues does Bing see on my site?"*
+- *"What crawl issues does the search engine see on my site?"*
 - *"How has my AI citation count trended over the past month?"*
+
+## Authentication
+
+### Option 1: API Key (Simple)
+
+Set the `BING_WEBMASTER_API_KEY` environment variable. This is the easiest option for personal use.
+
+### Option 2: OAuth Token File (Advanced)
+
+For OAuth 2.0 authentication, create `~/.citelens/token.json`:
+
+```json
+{
+  "access_token": "your-access-token",
+  "refresh_token": "your-refresh-token",
+  "expires_at": 1700000000000,
+  "client_id": "your-client-id",
+  "client_secret": "your-client-secret"
+}
+```
+
+Override the token file location with `CITELENS_TOKEN_FILE`.
+
+### Option 3: Environment Variables (OAuth)
+
+For containers or CI/CD:
+
+```bash
+export CITELENS_ACCESS_TOKEN="your-access-token"
+export CITELENS_REFRESH_TOKEN="your-refresh-token"
+export CITELENS_TOKEN_EXPIRES_AT="1700000000000"
+export CITELENS_CLIENT_ID="your-client-id"
+export CITELENS_CLIENT_SECRET="your-client-secret"
+```
 
 ## Configuration
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `BING_WEBMASTER_API_KEY` | Yes (for Bing tools) | Your Bing Webmaster API key |
+| `BING_WEBMASTER_API_KEY` | Yes* | Your Bing Webmaster API key |
+| `CITELENS_ACCESS_TOKEN` | Yes* | OAuth access token (alternative to API key) |
+| `CITELENS_REFRESH_TOKEN` | No | OAuth refresh token for auto-refresh |
+| `CITELENS_CLIENT_ID` | No | OAuth client ID (required for auto-refresh) |
+| `CITELENS_CLIENT_SECRET` | No | OAuth client secret (required for auto-refresh) |
+| `CITELENS_TOKEN_FILE` | No | Custom path to token.json (default: `~/.citelens/token.json`) |
 | `INDEXNOW_KEY` | No | Your IndexNow key (can also pass per-request) |
 | `CITELENS_DATA_DIR` | No | Data directory (default: `~/.citelens`) |
 
-## AI Citation Report Format
+*Either `BING_WEBMASTER_API_KEY` or `CITELENS_ACCESS_TOKEN` (or token file) is required.
 
-CiteLens accepts CSV/XLSX exports from Bing Webmaster Tools AI Performance section. It automatically detects these report types:
+## Security Notes
 
-- **AIPageStatsReport**: Page URLs and citation counts
-- **AIPerformanceOverviewStats**: Daily citation trends
-- **AISearchQueriesReport**: Grounding queries, intents, topics, and citation share
-
-The parser handles:
-- Multiple languages (English, German, Spanish, Italian, Chinese, Japanese)
-- Case and spacing variations in column names
-- Numbers with commas and percentage formats
-- Missing optional columns (Intent, Topic, Citation Share)
+- **API keys are sensitive.** Never commit them to version control.
+- **Token files are created with mode 600** (owner read/write only).
+- **OAuth tokens auto-refresh** when client credentials are provided, with the refreshed tokens written back to the token file.
+- **Local SQLite database** stores only your own imported reports and snapshots in `~/.citelens/`.
 
 ## How It Works
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │  Claude/Cursor  │────▶│   CiteLens MCP   │────▶│  Bing Webmaster │
-│    ChatGPT      │     │    (stdio)       │     │  Tools API      │
+│    Hermes       │     │    (stdio)       │     │  Tools API      │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
                                  │
                                  ▼
@@ -164,12 +220,15 @@ The parser handles:
 
 ```bash
 # Clone and install
-git clone https://github.com/user/citelens-mcp
+git clone https://github.com/Alexfeynman2023/citelens-mcp
 cd citelens-mcp
 npm install
 
 # Run tests
 npm test
+
+# Type check
+npm run typecheck
 
 # Build
 npm run build
@@ -184,15 +243,19 @@ BING_WEBMASTER_API_KEY=your-key npm run dev
 - [x] IndexNow submission
 - [x] AI citation report import and analysis
 - [x] Historical snapshot diffing
-- [ ] **Hosted version** with OAuth 2.0 (no API key sharing needed)
+- [x] OAuth 2.0 support with auto-refresh
+- [x] Hermes Agent plugin
+- [ ] **Hosted version** with web dashboard (no API key sharing needed)
 - [ ] Google Search Console integration
 - [ ] Automated weekly snapshots
 - [ ] Citation alerts and monitoring
 - [ ] Multi-site dashboard
 
+**Interested in a hosted version?** [Let us know!](https://github.com/Alexfeynman2023/citelens-mcp/issues/new?template=hosted_version_interest.md)
+
 ## Trademark Disclaimer
 
-This project is not affiliated with, endorsed by, or sponsored by Microsoft Corporation. "Bing" and "Microsoft Copilot" are trademarks of Microsoft Corporation. This tool works with Bing Webmaster Tools via its official API.
+This project is not affiliated with, endorsed by, or sponsored by Microsoft Corporation. This tool works with Bing Webmaster Tools via its official API.
 
 ## Contributing
 
@@ -204,4 +267,4 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Questions?** Open an issue or reach out on Twitter/X.
+**Questions?** [Open an issue](https://github.com/Alexfeynman2023/citelens-mcp/issues/new) or reach out on X.

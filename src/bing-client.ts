@@ -54,14 +54,15 @@ export class BingWebmasterClient {
     const url = new URL(`${BING_API_BASE}/${method}`);
     const headers = new Headers({ 'Accept': 'application/json' });
     
+    // Refresh expired OAuth tokens BEFORE applying auth
+    if (this.auth instanceof OAuthAuth) {
+      await this.auth.refreshIfNeeded();
+    }
+    
     this.auth.applyAuth(url, headers);
     
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
-    }
-
-    if (this.auth instanceof OAuthAuth) {
-      await this.auth.refreshIfNeeded();
     }
 
     const response = await fetch(url.toString(), {
@@ -79,14 +80,15 @@ export class BingWebmasterClient {
       'Content-Type': 'application/json; charset=utf-8',
     });
     
+    // Refresh expired OAuth tokens BEFORE applying auth
+    if (this.auth instanceof OAuthAuth) {
+      await this.auth.refreshIfNeeded();
+    }
+    
     this.auth.applyAuth(url, headers);
     
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
-    }
-
-    if (this.auth instanceof OAuthAuth) {
-      await this.auth.refreshIfNeeded();
     }
 
     const response = await fetch(url.toString(), {

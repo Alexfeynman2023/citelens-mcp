@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "citelens-mcp": "dist/index.js"
+    "citelens-mcp": "./dist/index.js"
   },
   "files": [
     "dist"
@@ -25,24 +25,27 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "bing-webmaster-tools",
     "indexnow",
-    "seo",
-    "ai-citation",
-    "copilot"
+    "webmaster",
+    "ai-citations",
+    "seo"
   ],
-  "author": "",
+  "author": "Alex Feynman",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/user/citelens-mcp.git"
+    "url": "git+https://github.com/Alexfeynman2023/citelens-mcp.git"
+  },
+  "homepage": "https://github.com/Alexfeynman2023/citelens-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Alexfeynman2023/citelens-mcp/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.0.0",
     "csv-parse": "^5.5.0",
     "xlsx": "^0.18.5"
   },

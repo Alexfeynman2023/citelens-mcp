@@ -1,9 +1,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import type { Config } from './config.js';
-import { BingWebmasterClient } from './bing-client.js';
+import { BingWebmasterClient, OAuthAuth, type OAuthTokens } from './bing-client.js';
 import { IndexNowClient } from './indexnow-client.js';
 import { CiteLensDatabase } from './database.js';
 import { parseReportFile } from './citation-parser.js';
+import { saveTokenFile, oauthTokensToTokenFile } from './token-file.js';
 import type {
   AIPageStats,
   AIPerformanceOverview,
@@ -32,10 +33,44 @@ export function createToolContext(config: Config): ToolContext {
     },
     getBingClient: () => {
       if (!bingClient) {
-        if (!config.bingWebmasterApiKey) {
-          throw new Error('BING_WEBMASTER_API_KEY environment variable is not set');
+        // Priority: OAuth > API Key
+        if (config.oauth) {
+          const { tokens, clientId, clientSecret } = config.oauth;
+          
+          // Create refresh callback if we have client credentials
+          const onTokenRefresh = clientId && clientSecret
+            ? async (currentTokens: OAuthTokens): Promise<OAuthTokens> => {
+                if (!currentTokens.refreshToken) {
+                  throw new Error('No refresh token available');
+                }
+                
+                const newTokens = await OAuthAuth.refreshAccessToken(
+                  clientId,
+                  clientSecret,
+                  currentTokens.refreshToken
+                );
+                
+                // Persist refreshed tokens to file
+                try {
+                  saveTokenFile(oauthTokensToTokenFile(newTokens, clientId, clientSecret));
+                } catch {
+                  // Ignore file save errors (e.g., read-only filesystem)
+                }
+                
+                return newTokens;
+              }
+            : undefined;
+          
+          const oauthAuth = new OAuthAuth(tokens, onTokenRefresh);
+          bingClient = new BingWebmasterClient(oauthAuth);
+        } else if (config.bingWebmasterApiKey) {
+          bingClient = new BingWebmasterClient(config.bingWebmasterApiKey);
+        } else {
+          throw new Error(
+            'No authentication configured. Set BING_WEBMASTER_API_KEY, ' +
+            'CITELENS_ACCESS_TOKEN, or create ~/.citelens/token.json'
+          );
         }
-        bingClient = new BingWebmasterClient(config.bingWebmasterApiKey);
       }
       return bingClient;
     },

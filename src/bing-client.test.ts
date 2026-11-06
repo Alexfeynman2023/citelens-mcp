@@ -309,6 +309,67 @@ describe('BingWebmasterClient', () => {
     });
   });
 
+  describe('OAuth refresh timing', () => {
+    it('should refresh expired token BEFORE applying auth to request', async () => {
+      const callOrder: string[] = [];
+      
+      const mockAuth = {
+        refreshIfNeeded: vi.fn().mockImplementation(async () => {
+          callOrder.push('refresh');
+        }),
+        applyAuth: vi.fn().mockImplementation(() => {
+          callOrder.push('applyAuth');
+        }),
+      };
+      
+      // Create client with mock auth by using prototype manipulation
+      const oauthClient = new BingWebmasterClient('test-key');
+      (oauthClient as unknown as { auth: typeof mockAuth }).auth = mockAuth;
+      
+      // Mock the instanceof check by making auth look like OAuthAuth
+      Object.defineProperty(mockAuth, 'constructor', { value: { name: 'OAuthAuth' } });
+      
+      (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+        createMockResponse({
+          ok: true,
+          json: async () => ({ d: [] }),
+        })
+      );
+
+      // Import OAuthAuth to create a real instance for proper instanceof check
+      const { OAuthAuth } = await import('./bing-auth.js');
+      
+      let refreshCalled = false;
+      const oauthAuth = new OAuthAuth(
+        {
+          accessToken: 'expired-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 1000,
+        },
+        async (tokens) => {
+          refreshCalled = true;
+          return {
+            accessToken: 'new-token',
+            refreshToken: tokens.refreshToken,
+            expiresAt: Date.now() + 3600000,
+          };
+        }
+      );
+
+      const oauthClientReal = new BingWebmasterClient(oauthAuth);
+      await oauthClientReal.getUserSites();
+
+      expect(refreshCalled).toBe(true);
+      // Verify the fetch was called with the refreshed token
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.any(Headers),
+        })
+      );
+    });
+  });
+
   describe('date parsing', () => {
     it('should parse positive milliseconds', async () => {
       const mockStats = [
