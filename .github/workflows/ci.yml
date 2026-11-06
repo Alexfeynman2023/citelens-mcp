@@ -12,6 +12,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [20.x, 22.x, 24.x]
+        exclude:
+          # better-sqlite3 v12 has no Windows prebuilds for Node 20 (ABI v115)
+          # and node-gyp build fails on GitHub Actions Windows runner
+          - os: windows-latest
+            node-version: 20.x
       fail-fast: false
 
     runs-on: ${{ matrix.os }}
