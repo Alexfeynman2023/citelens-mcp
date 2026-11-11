@@ -63,11 +63,42 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check package can be packed
-        run: npm pack --dry-run
-
-      - name: Test npx execution
+      - name: Verify npm publish dry-run has no bin warnings
         run: |
-          timeout 3 node dist/index.js || true
-        env:
-          BING_WEBMASTER_API_KEY: ''
+          OUTPUT=$(npm publish --dry-run 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -q "bin\["; then
+            echo "ERROR: npm publish has bin field warnings"
+            exit 1
+          fi
+
+      - name: Pack and verify tarball
+        run: |
+          npm pack
+          tar tvf citelens-mcp-*.tgz | grep "dist/index.js"
+
+      - name: Install packed tarball and verify bin works
+        run: |
+          mkdir -p /tmp/test-install
+          cd /tmp/test-install
+          npm init -y
+          npm install $GITHUB_WORKSPACE/citelens-mcp-*.tgz
+          
+          # Verify bin symlink exists and is executable
+          ls -la node_modules/.bin/citelens-mcp
+          test -x node_modules/citelens-mcp/dist/index.js
+          
+          # Test MCP server responds to initialize + tools/list
+          RESPONSE=$(printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}\n{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n' | timeout 10 npx citelens-mcp 2>&1)
+          echo "$RESPONSE"
+          
+          # Verify server info in initialize response
+          echo "$RESPONSE" | grep -q '"serverInfo"'
+          
+          # Verify tools/list returns expected number of tools (27)
+          TOOL_COUNT=$(echo "$RESPONSE" | tail -1 | jq '.result.tools | length')
+          echo "Tool count: $TOOL_COUNT"
+          if [ "$TOOL_COUNT" -ne 27 ]; then
+            echo "ERROR: Expected 27 tools, got $TOOL_COUNT"
+            exit 1
+          fi
